@@ -1,0 +1,11 @@
+@"
+.venv/
+.terraform/
+__pycache__/
+.pytest_cache/
+*.pyc
+terraform.tfstate
+terraform.tfstate.*
+terraform.tfvars
+gitleaks-test.txt
+"@ | Set-Content ".gitignore"

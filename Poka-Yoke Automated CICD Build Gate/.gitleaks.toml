@@ -1,0 +1,32 @@
+# .gitleaks.toml
+# Extends gitleaks' default ruleset rather than replacing it — the default
+# rules already cover common cases (AWS keys, generic API key patterns,
+# private keys, etc). This file only ADDS the patterns specific to our stack
+# that the default rules wouldn't catch.
+
+title = "HabotConnect gitleaks config"
+
+[extend]
+useDefault = true
+
+# JUDGMENT CALL: Django's SECRET_KEY is easy to accidentally commit because
+# it's often generated once and pasted directly into settings.py during local
+# dev, then never removed before the first commit. Default gitleaks rulesets
+# don't specifically look for this pattern, so it's added here.
+[[rules]]
+id = "django-secret-key"
+description = "Hardcoded Django SECRET_KEY"
+regex = '''SECRET_KEY'''
+tags = ["django", "secret"]
+
+[[rules]]
+id = "gcp-service-account-private-key"
+description = "Embedded GCP service account private key"
+regex = '''(?i)"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----'''
+tags = ["gcp", "credentials", "private-key"]
+
+[allowlist]
+description = "Example environment files only"
+paths = [
+  '''\.env\.example$''',
+]

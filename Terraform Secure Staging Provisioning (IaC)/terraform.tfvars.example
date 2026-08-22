@@ -1,0 +1,11 @@
+project_id = "YOUR_GCP_PROJECT_ID"
+
+region = "us-central1"
+
+environment = "staging"
+
+raw_landing_retention_days = 30
+
+pipeline_service_account_id = "onboarding-pipeline-sa"
+
+authorized_analytics_principal = "user:YOUR_EMAIL@example.com"

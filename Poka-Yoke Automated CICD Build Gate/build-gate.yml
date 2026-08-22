@@ -1,0 +1,164 @@
+name: Poka-Yoke Build Gate
+
+# Runs on every PR into main/staging. Deliberately does NOT run on a schedule
+# or manual dispatch only — the whole point is that a non-compliant commit
+# can never reach the deploy step, so the gate has to sit in the PR path
+# itself, not be an optional/manual check.
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
+
+# JUDGMENT CALL: I scoped permissions down to read-only by default. The
+# quarantine job below needs write access to labels/issues, so it gets an
+# explicit narrower override instead of the whole workflow running with
+# broad default GITHUB_TOKEN permissions.
+permissions:
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. FORMATTING — Python (Django)
+  # -------------------------------------------------------------------------
+  lint-python:
+    name: Lint & format check — Django/DCYN
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint dependencies
+        run: pip install black==24.4.2 flake8==7.0.0
+
+      - name: Check formatting
+        working-directory: Schema Mapping and DCYN Validation
+        run: black --check .
+
+      - name: Lint
+        working-directory: Schema Mapping and DCYN Validation
+        run: flake8 . --max-line-length=100
+
+  python-tests:
+    name: Django/DCYN tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest
+          pip install django djangorestframework
+
+      - name: Run tests
+        working-directory: Schema Mapping and DCYN Validation
+        run: python -m pytest -q
+
+
+  terraform-check:
+    name: Terraform validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Terraform format check
+        working-directory: Terraform Secure Staging Provisioning (IaC)
+        run: terraform fmt -check
+
+      - name: Terraform init
+        working-directory: Terraform Secure Staging Provisioning (IaC)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: Terraform Secure Staging Provisioning (IaC)
+        run: terraform validate
+
+  # -------------------------------------------------------------------------
+  # 2. SECRET SCANNING — the specific failure mode described in the brief
+  #    (unencrypted API credentials committed into raw application code)
+  # -------------------------------------------------------------------------
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks needs full history, not just the latest commit,
+                          # to catch a secret that was added then "removed" later —
+                          # it's still in git history and still a leak.
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          config: Poka-Yoke Automated CICD Build Gate/.gitleaks.toml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # gitleaks-action exits non-zero on any finding by default — deliberately
+        # not overriding that with GITLEAKS_ENABLE_COMMENTS or continue-on-error.
+
+  # -------------------------------------------------------------------------
+  # 3. THE ACTUAL GATE
+  # This job only runs if every job above succeeded. Nothing downstream
+  # (deploy) can ever depend on a step that was skipped or soft-failed —
+  # `needs:` with no `if:` override means a single red job blocks everything.
+  # -------------------------------------------------------------------------
+  build-gate:
+    name: Fail-closed gate
+    runs-on: ubuntu-latest
+    needs: [lint-python, python-tests, terraform-check, secret-scan]
+    steps:
+      - name: All checks passed — gate open
+        run: echo "Build gate passed. Safe to proceed to deploy."
+
+  # -------------------------------------------------------------------------
+  # 4. QUARANTINE ON FAILURE
+  # Runs only if the gate did NOT pass. Labels the PR and blocks merge
+  # explicitly, rather than just leaving a red X that someone could
+  # theoretically force-merge past.
+  # -------------------------------------------------------------------------
+  quarantine:
+    name: Quarantine non-compliant build
+    runs-on: ubuntu-latest
+    needs: [lint-python, python-tests, terraform-check, secret-scan]
+    if: failure()
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Label PR as quarantined
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ["quarantined", "failed-build-gate"],
+            });
+
+      - name: Fail the workflow explicitly
+        # Belt-and-suspenders: even though upstream jobs already failed,
+        # this makes the quarantine job itself red too, so "quarantine ran
+        # but reported green" can never happen.
+        run: |
+          echo "One or more mistake-proofing checks failed."
+          echo "This build is quarantined and must NOT be deployed."
+          exit 1

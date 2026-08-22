@@ -1,0 +1,15 @@
+{
+  "student_full_name": "Amara Osei",
+  "date_of_birth": "2016-04-12",
+  "guardian_full_name": "Folake Osei",
+  "guardian_email": "folake.osei@example.com",
+  "guardian_phone_number": "+254712345678",
+  "has_existing_learning_diagnosis": "Yes",
+  "diagnosis_type": "Dyslexia",
+  "diagnosis_documentation_uploaded": "No",
+  "requires_learning_support_assistant": "Yes",
+  "preferred_support_frequency": "3 sessions per week",
+  "parent_consent_statement_accepted": "Yes",
+  "guardian_identity_verified": "Pending",
+  "additional_notes": "Student responds well to visual learning aids."
+}
