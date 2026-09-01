@@ -1,8 +1,8 @@
 # Secure Student Onboarding Data Pipeline
 
 ## Junior Cloud & DevOps Engineer Project
+<img width="1376" height="768" alt="student secure onboarding pipeline" src="https://github.com/user-attachments/assets/bb0226fd-31cf-49c2-a779-c26cb5976cdf" />
 
-**Candidate:** Gokul S  
 **Project:** Secure Student Onboarding Data Pipeline  
 **Focus:** GCP • Terraform • GitHub Actions • Gitleaks • Django REST Framework • DCYN • BigQuery
 
